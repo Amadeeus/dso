@@ -111,9 +111,6 @@ public:
 
         float depth;
 
-        int dx = patternP[0][0];
-        int dy = patternP[0][1];
-
         for (FrameHessian* f : frames)
         {
             // Process the optimized keyframes (in final model).
@@ -144,23 +141,21 @@ public:
                         (int) f->pointHessiansMarginalized.size(),
                         (int) f->immaturePoints.size());
                 std::cout << T_W_C << "\n";
-                std::cout << "dx" << dx << "\n";
-                std::cout << "dy" << dy << "\n";
 
                 // Log the point host ID & positions in text file.
                 for (PointHessian* p : f->pointHessiansMarginalized)
                 {
                     depth = 1.0f / p->idepth_scaled;
-                    p_C_pointcloud[0] = ((p->u + dx) * fxi +cxi) * depth;
-                    p_C_pointcloud[1] = ((p->v + dy) * fyi +cyi) * depth;
+                    p_C_pointcloud[0] = (p->u * fxi + cxi) * depth;
+                    p_C_pointcloud[1] = (p->v * fyi + cyi) * depth;
                     p_C_pointcloud[2] = depth * (1 + 2 * fxi *
                             (rand() / (float) RAND_MAX - 0.5f));
-                    p_C_pointcloud[3] = 0;
+                    p_C_pointcloud[3] = 1;
 
                     p_W_pointcloud = T_W_C * p_C_pointcloud;
 
-                    std::cout << p_W_pointcloud.transpose() << "\n";
-                    pointcloudFile << f->frameID << " " << p_W_pointcloud.transpose()
+                    pointcloudFile << f->frameID
+                            << " " << p_W_pointcloud.transpose().head(3)
                             << " " << p->u << " " << p->v
                             << " " << p->idepth_scaled
                             << " " << sqrt(1.0f / p->idepth_hessian)
