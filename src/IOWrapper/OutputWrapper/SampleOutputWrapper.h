@@ -75,38 +75,65 @@ public:
     virtual void publishKeyframes(std::vector<FrameHessian*> &frames,
             bool final, CalibHessian* HCalib)
     {
+        const std::string keyframeFilename = "keyframePoses.txt";
+        const std::string pointcloudFilename = "PointCouldPositions.txt";
+        std::ofstream keyframeFile, pointcloudFile;
+
+        keyframeFile.open(keyframeFilename.c_str(), std::ios_base::app);
+        keyframeFile << std::setprecision(15);
+
+        pointcloudFile.open(pointcloudFilename.c_str(), std::ios_base::app);
+        pointcloudFile << std::setprecision(15);
+
         for (FrameHessian* f : frames)
         {
-            printf(
-                    "OUT: KF %d (%s) (id %d, tme %f): %d active, %d marginalized, %d immature points. CameraToWorld:\n",
-                    f->frameID, final ? "final" : "non-final",
-                    f->shell->incoming_id, f->shell->timestamp,
-                    (int) f->pointHessians.size(),
-                    (int) f->pointHessiansMarginalized.size(),
-                    (int) f->immaturePoints.size());
-            std::cout << f->shell->camToWorld.matrix3x4() << "\n";
-
-            int maxWrite = 5;
-            for (PointHessian* p : f->pointHessians)
+            // Process the optimized keyframes (in final model).
+            if (final == true)
             {
-                printf(
-                        "OUT: Example Point x=%.1f, y=%.1f, idepth=%f, idepth std.dev. %f, %d inlier-residuals\n",
-                        p->u, p->v, p->idepth_scaled,
-                        sqrt(1.0f / p->idepth_hessian), p->numGoodResiduals);
-                maxWrite--;
-                if (maxWrite == 0)
-                    break;
+                if (!f->shell->poseValid)
+                    continue;
+                // Log the keyframe ID & poses in text file.
+                keyframeFile << f->frameID << " " << f->shell->timestamp << " "
+                        << f->shell->camToWorld.translation().transpose() << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().x()
+                        << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().y()
+                        << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().z()
+                        << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().w()
+                        << "\n";
+
+                // Display the keyframes.
+                printf("OUT: KF %d (%s) (id %d, tme %f): %d active, "
+                        "%d marginalized, %d immature points. CameraToWorld:\n",
+                        f->frameID, final ? "final" : "non-final",
+                        f->shell->incoming_id, f->shell->timestamp,
+                        (int) f->pointHessians.size(),
+                        (int) f->pointHessiansMarginalized.size(),
+                        (int) f->immaturePoints.size());
+                std::cout << f->shell->camToWorld.matrix3x4() << "\n";
+
+                // Log the pointcloud host ID & positions in text file.
+                for (PointHessian* p : f->pointHessiansMarginalized)
+                {
+                    pointcloudFile << f->frameID << " " << p->u << " " << p->v
+                            << " " << p->idepth_scaled << " "
+                            << sqrt(1.0f / p->idepth_hessian) << " "
+                            << p->numGoodResiduals << "\n";
+                }
             }
         }
+        keyframeFile.close();
+        pointcloudFile.close();
     }
 
     virtual void publishCamPose(FrameShell* frame, CalibHessian* HCalib)
     {
-        printf("OUT: Current Frame %d (time %f, internal ID %d). CameraToWorld:\n",
-         frame->incoming_id,
-         frame->timestamp,
-         frame->id);
-         std::cout << frame->camToWorld.matrix3x4() << "\n";
+        printf(
+                "OUT: Current Frame %d (time %f, internal ID %d). CameraToWorld:\n",
+                frame->incoming_id, frame->timestamp, frame->id);
+        std::cout << frame->camToWorld.matrix3x4() << "\n";
     }
 
     virtual void pushLiveFrame(FrameHessian* image)
