@@ -93,7 +93,7 @@ public:
         setParameter(HCalib);
 
         const std::string keyframeFilename = "keyframePoses.txt";
-        const std::string pointcloudFilename = "pointCouldPositions.txt";
+        const std::string pointcloudFilename = "pointCloudPositions.txt";
         std::ofstream keyframeFile, pointcloudFile;
 
         keyframeFile.open(keyframeFilename.c_str(), std::ios_base::app);
