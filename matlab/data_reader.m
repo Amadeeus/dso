@@ -1,34 +1,61 @@
 clear all
 close all
-%% Dataset directory
-dataset_dir = '../build/bin/';
+%% Read dataset
+% Dataset directory
+dataset_dir = '../build/bin/result/Robotcar_15_08_12_15_04_18_centre_01_2000/';
 
-pointcloud_file = fopen([dataset_dir 'pointCloudPositions.txt'], 'r');
-raw_data = fscanf(pointcloud_file, '%f', [9 Inf])';
-pointcloud = raw_data(:, 2:4);
+landmark_file = fopen([dataset_dir 'pointCloudPositions.txt'], 'r');
+landmark_raw_data = fscanf(landmark_file, '%f', [9 Inf])';
 
-threshold = 3;
+keyframe_file = fopen([dataset_dir 'keyframePoses.txt'], 'r');
+keyframe_raw_data = fscanf(keyframe_file, '%f', [9 Inf])';
 
-for i = 1:2
-    pc_mean = mean(pointcloud);
-    pc_std = std(pointcloud);
-    
-    num_point = size(pointcloud, 1);
-    filter = sum(abs(pointcloud - repmat(pc_mean, [num_point 1])) > repmat(threshold * pc_std, [num_point 1]) , 2) == 0;
-    pointcloud = pointcloud(filter, :);
-end
+%%
+% Sort keyframes and landmarks in ascending order
+[~, kf_arrange] = sort(keyframe_raw_data(:, 1));
+[~, lm_arrange] = sort(landmark_raw_data(:, 1));
 
-pc = pointCloud(pointcloud);
-pcshow(pc);
+keyframe_sorted = keyframe_raw_data(kf_arrange, :);
+landmark_sorted = landmark_raw_data(lm_arrange, :);
+
+kf_positions = keyframe_sorted(:,3:5);
+kf_orientations = keyframe_sorted(:,6:9);
+
+lm_positions = landmark_sorted(:, 2:4);
+
+% Outlier rejection
+landmark_position_mean = mean(lm_positions);
+landmark_position_std = std(lm_positions);
+
+threshold = landmark_position_std;
+
+deviation = abs(bsxfun(@minus, lm_positions, landmark_position_mean));
+filter = sum(bsxfun(@ge, deviation, threshold), 2) == 0; 
+
+lm_positions_filtered = lm_positions(filter, :);
+
+% Align landmarks with gravity direction
+[lm_positions_aligned, kf_positions_aligned, ~] = ...
+    position_alignment(lm_positions_filtered, kf_positions, kf_orientations);
+
+%% Plot
+figure(1);
+landmark = pointCloud(lm_positions_filtered);
+pcshow(landmark);
+hold on;
+plot3(keyframe_sorted(:,3), keyframe_sorted(:,4), keyframe_sorted(:,5))
 
 title('DSO Edge Map');
 xlabel('X');
 ylabel('Y');
 zlabel('Z');
 
-pointcloud_aligned = align_pointcloud(pointcloud);
-pc_aligned = pointCloud(pointcloud_aligned);
-pcshow(pc_aligned);
+figure(2);
+landmark_aligned = pointCloud(lm_positions_aligned);
+pcshow(landmark_aligned);
+hold on;
+plot3(kf_positions_aligned(:,1), kf_positions_aligned(:,2), ...
+    kf_positions_aligned(:,3))
 
 title('DSO Edge Map (Aligned with gravity direction)');
 xlabel('X');
