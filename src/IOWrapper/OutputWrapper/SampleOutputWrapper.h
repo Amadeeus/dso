@@ -94,13 +94,20 @@ public:
 
         const std::string keyframeFilename = "keyframePoses.txt";
         const std::string pointcloudFilename = "pointCloudPositions.txt";
-        std::ofstream keyframeFile, pointcloudFile;
+        // The 'associationTrack' file contains information about visual
+        // data-associations between frames and landmarks.
+        const std::string associationTrackFilename = "associationTrack.txt";
+        std::ofstream keyframeFile, pointcloudFile, associationTrackFile;
 
         keyframeFile.open(keyframeFilename.c_str(), std::ios_base::app);
         keyframeFile << std::setprecision(15);
 
         pointcloudFile.open(pointcloudFilename.c_str(), std::ios_base::app);
         pointcloudFile << std::setprecision(15);
+
+        associationTrackFile.open(associationTrackFilename.c_str(),
+                std::ios_base::app);
+        associationTrackFile << std::setprecision(15);
 
         // Point position in camera frame and world frame
         Eigen::Matrix<double, 4, 1> p_C_pointcloud;
@@ -160,6 +167,17 @@ public:
                             << " " << p->idepth_scaled
                             << " " << sqrt(1.0f / p->idepth_hessian)
                             << " " << p->numGoodResiduals << "\n";
+
+                    associationTrackFile << f->frameID
+                            << " " << p->u << " " << p->v
+                            << " " << p->residuals.size();
+
+                    for (int n = 0; n < p->residuals.size(); n++)
+                    {
+                        associationTrackFile << " "
+                                << p->residuals[n]->target->frameID;
+                    }
+                    associationTrackFile << "\n";
                 }
             }
         }
