@@ -2,14 +2,19 @@ clear all
 close all
 %% Read dataset
 % Dataset directory
-dataset_dir = '../build/bin/result/Robotcar_15_08_12_15_04_18_centre_01_2000/';
+dataset_dir = '../build/bin/result/Robotcar_15_05_19_14_06_38_segment_01_2000_dataAssociation/';
 
-landmark_file = fopen([dataset_dir 'pointCloudPositions.txt'], 'r');
-landmark_raw_data = fscanf(landmark_file, '%f', [9 Inf])';
+% landmark_file = fopen([dataset_dir 'pointCloudPositions.txt'], 'r');
+% landmark_raw_data = fscanf(landmark_file, '%f', [9 Inf])';
 
 keyframe_file = fopen([dataset_dir 'keyframePoses.txt'], 'r');
 keyframe_raw_data = fscanf(keyframe_file, '%f', [9 Inf])';
 
+landmark_file = [dataset_dir 'test_associationTrack.txt'];
+landmark_raw_data = import_data_association_file(landmark_file);
+
+assert(sum(sum(~isnan(landmark_raw_data(:, end)))) == 0, ...
+    'The predefined column number of landmark_raw_data matrix is too small!');
 %%
 % Sort keyframes and landmarks in ascending order
 [~, kf_arrange] = sort(keyframe_raw_data(:, 1));
@@ -27,7 +32,7 @@ lm_positions = landmark_sorted(:, 2:4);
 landmark_position_mean = mean(lm_positions);
 landmark_position_std = std(lm_positions);
 
-threshold = landmark_position_std;
+threshold = 2 * landmark_position_std;
 
 deviation = abs(bsxfun(@minus, lm_positions, landmark_position_mean));
 filter = sum(bsxfun(@ge, deviation, threshold), 2) == 0; 
