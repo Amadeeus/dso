@@ -94,6 +94,7 @@ public:
 
         const std::string keyframeFilename = "keyframePoses.txt";
         const std::string pointcloudFilename = "pointCloudPositions.txt";
+
         std::ofstream keyframeFile, pointcloudFile;
 
         keyframeFile.open(keyframeFilename.c_str(), std::ios_base::app);
@@ -159,7 +160,15 @@ public:
                             << " " << p->u << " " << p->v
                             << " " << p->idepth_scaled
                             << " " << sqrt(1.0f / p->idepth_hessian)
-                            << " " << p->numGoodResiduals << "\n";
+                            << " " << p->numGoodResiduals
+                            << " " << p->residuals.size();
+
+                    for (int n = 0; n < p->residuals.size(); n++)
+                    {
+                        pointcloudFile << " "
+                                << p->residuals[n]->target->frameID;
+                    }
+                    pointcloudFile << "\n";
                 }
             }
         }
