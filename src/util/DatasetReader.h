@@ -42,24 +42,53 @@
 
 using namespace dso;
 
-inline int getdir(std::string dir, std::vector<std::string> &files)
+inline int getdir(std::string dir, const std::string datasetType,
+        std::vector<std::string> &files)
 {
-    DIR *dp;
-    struct dirent *dirp;
-    if ((dp = opendir(dir.c_str())) == NULL)
+    if (datasetType == "robotcar")
     {
-        return -1;
-    }
+        std::ifstream tr;
+        std::string timesFile = dir.substr(0, dir.find_last_of('/'))
+                + "/../../../stereo.timestamps";
+        tr.open(timesFile.c_str());
+        while (!tr.eof() && tr.good())
+        {
+            char buf[1000];
+            tr.getline(buf, 1000);
 
-    while ((dirp = readdir(dp)) != NULL)
+            int mission_id;
+            long long timestamp_mus;
+
+            if (2 == std::sscanf(buf, "%lld %d", &timestamp_mus, &mission_id))
+            {
+                files.push_back(std::to_string(timestamp_mus) + ".png");
+            }
+            else
+            {
+                printf("ERROR: unknown timestamp format.");
+                exit(1);
+            }
+        }
+        tr.close();
+    }
+    else
     {
-        std::string name = std::string(dirp->d_name);
+        DIR *dp;
+        struct dirent *dirp;
+        if ((dp = opendir(dir.c_str())) == NULL)
+        {
+            return -1;
+        }
 
-        if (name != "." && name != "..")
-            files.push_back(name);
+        while ((dirp = readdir(dp)) != NULL)
+        {
+            std::string name = std::string(dirp->d_name);
+
+            if (name != "." && name != "..")
+                files.push_back(name);
+        }
+        closedir(dp);
     }
-    closedir(dp);
-
     std::sort(files.begin(), files.end());
 
     if (dir.at(dir.length() - 1) != '/')
@@ -140,8 +169,9 @@ public:
                     "ERROR: cannot read .zip archive, as compile without ziplib!\n");
             exit(1);
 #endif
-        } else
-            getdir(path, files);
+        }
+        else
+            getdir(path, datasetType, files);
 
         undistort = Undistort::getUndistorterForFile(calibFile, gammaFile,
                 vignetteFile);
@@ -240,7 +270,8 @@ private:
         {
             // CHANGE FOR ZIP FILE
             return IOWrap::readImageBW_8U(files[id]);
-        } else
+        }
+        else
         {
 #if HAS_ZIPLIB
             if(databuffer==0) databuffer = new char[widthOrg*heightOrg*6+10000];
@@ -305,13 +336,15 @@ private:
                 {
                     timestamps.push_back(timestamp_mus * 1e-6);
                     exposures.push_back(exposure);
-                } else
+                }
+                else
                 {
                     printf("ERROR: unknown timestamp format.");
                     exit(1);
                 }
             }
-        } else
+        }
+        else
         {
             printf("ERROR: unknown dataset type.");
             exit(1);

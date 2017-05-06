@@ -23,11 +23,14 @@
 
 #pragma once
 #include "boost/thread.hpp"
-#include "util/MinimalImage.h"
-#include "IOWrapper/Output3DWrapper.h"
 
 #include "FullSystem/HessianBlocks.h"
+#include "IOWrapper/Output3DWrapper.h"
 #include "util/FrameShell.h"
+#include "util/MinimalImage.h"
+
+
+
 
 namespace dso
 {
@@ -50,6 +53,18 @@ public:
     virtual ~SampleOutputWrapper()
     {
         printf("OUT: Destroyed SampleOutputWrapper\n");
+    }
+
+    virtual void setParameter(CalibHessian* HCalib)
+    {
+        fx = HCalib->fxl();
+        fy = HCalib->fyl();
+        cx = HCalib->cxl();
+        cy = HCalib->cyl();
+        fxi = 1 / fx;
+        fyi = 1 / fy;
+        cxi = -cx / fx;
+        cyi = -cy / fy;
     }
 
     virtual void publishGraph(
@@ -75,38 +90,98 @@ public:
     virtual void publishKeyframes(std::vector<FrameHessian*> &frames,
             bool final, CalibHessian* HCalib)
     {
+        setParameter(HCalib);
+
+        const std::string keyframeFilename = "keyframePoses.txt";
+        const std::string pointcloudFilename = "pointCloudPositions.txt";
+
+        std::ofstream keyframeFile, pointcloudFile;
+
+        keyframeFile.open(keyframeFilename.c_str(), std::ios_base::app);
+        keyframeFile << std::setprecision(15);
+
+        pointcloudFile.open(pointcloudFilename.c_str(), std::ios_base::app);
+        pointcloudFile << std::setprecision(15);
+
+        // Point position in camera frame and world frame
+        Eigen::Matrix<double, 4, 1> p_C_pointcloud;
+        Eigen::Matrix<double, 4, 1> p_W_pointcloud;
+
+        // Transformation matrix from camera frame to world frame
+        Eigen::Matrix<double, 4, 4> T_W_C;
+
+        float depth;
+
         for (FrameHessian* f : frames)
         {
-            printf(
-                    "OUT: KF %d (%s) (id %d, tme %f): %d active, %d marginalized, %d immature points. CameraToWorld:\n",
-                    f->frameID, final ? "final" : "non-final",
-                    f->shell->incoming_id, f->shell->timestamp,
-                    (int) f->pointHessians.size(),
-                    (int) f->pointHessiansMarginalized.size(),
-                    (int) f->immaturePoints.size());
-            std::cout << f->shell->camToWorld.matrix3x4() << "\n";
-
-            int maxWrite = 5;
-            for (PointHessian* p : f->pointHessians)
+            // Process the optimized keyframes (in final model).
+            if (final == true)
             {
-                printf(
-                        "OUT: Example Point x=%.1f, y=%.1f, idepth=%f, idepth std.dev. %f, %d inlier-residuals\n",
-                        p->u, p->v, p->idepth_scaled,
-                        sqrt(1.0f / p->idepth_hessian), p->numGoodResiduals);
-                maxWrite--;
-                if (maxWrite == 0)
-                    break;
+                if (!f->shell->poseValid)
+                    continue;
+                // Log the keyframe ID & poses in text file.
+                keyframeFile << f->frameID << " " << f->shell->timestamp << " "
+                        << f->shell->camToWorld.translation().transpose() << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().x()
+                        << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().y()
+                        << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().z()
+                        << " "
+                        << f->shell->camToWorld.so3().unit_quaternion().w()
+                        << "\n";
+
+                T_W_C = f->shell->camToWorld.matrix();
+
+                // Display the keyframes.
+                printf("OUT: KF %d (%s) (id %d, tme %f): %d active, "
+                        "%d marginalized, %d immature points. CameraToWorld:\n",
+                        f->frameID, final ? "final" : "non-final",
+                        f->shell->incoming_id, f->shell->timestamp,
+                        (int) f->pointHessians.size(),
+                        (int) f->pointHessiansMarginalized.size(),
+                        (int) f->immaturePoints.size());
+                std::cout << T_W_C << "\n";
+
+                // Log the point host ID & positions in text file.
+                for (PointHessian* p : f->pointHessiansMarginalized)
+                {
+                    depth = 1.0f / p->idepth_scaled;
+                    p_C_pointcloud[0] = (p->u * fxi + cxi) * depth;
+                    p_C_pointcloud[1] = (p->v * fyi + cyi) * depth;
+                    p_C_pointcloud[2] = depth * (1 + 2 * fxi *
+                            (rand() / (float) RAND_MAX - 0.5f));
+                    p_C_pointcloud[3] = 1;
+
+                    p_W_pointcloud = T_W_C * p_C_pointcloud;
+
+                    pointcloudFile << f->frameID
+                            << " " << p_W_pointcloud.transpose().head(3)
+                            << " " << p->u << " " << p->v
+                            << " " << p->idepth_scaled
+                            << " " << sqrt(1.0f / p->idepth_hessian)
+                            << " " << p->numGoodResiduals
+                            << " " << p->residuals.size();
+
+                    for (int n = 0; n < p->residuals.size(); n++)
+                    {
+                        pointcloudFile << " "
+                                << p->residuals[n]->target->frameID;
+                    }
+                    pointcloudFile << "\n";
+                }
             }
         }
+        keyframeFile.close();
+        pointcloudFile.close();
     }
 
     virtual void publishCamPose(FrameShell* frame, CalibHessian* HCalib)
     {
-        printf("OUT: Current Frame %d (time %f, internal ID %d). CameraToWorld:\n",
-         frame->incoming_id,
-         frame->timestamp,
-         frame->id);
-         std::cout << frame->camToWorld.matrix3x4() << "\n";
+        /*printf(
+                "OUT: Current Frame %d (time %f, internal ID %d). CameraToWorld:\n",
+                frame->incoming_id, frame->timestamp, frame->id);
+        std::cout << frame->camToWorld.matrix3x4() << "\n";*/
     }
 
     virtual void pushLiveFrame(FrameHessian* image)
@@ -149,6 +224,10 @@ public:
                 break;
         }
     }
+
+private:
+    float fx, fy, cx, cy;
+    float fxi, fyi, cxi, cyi;
 };
 
 }
