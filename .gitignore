@@ -9,3 +9,5 @@ build-*
 *.so.*
 .cproject
 .project
+.idea
+cmake-build-debug
