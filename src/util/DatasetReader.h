@@ -28,8 +28,14 @@
 
 #include <sstream>
 #include <fstream>
+#include <iostream>
+using std::cout;
+using std::endl;
 #include <dirent.h>
 #include <algorithm>
+
+#include <vector>
+#include <boost/algorithm/string.hpp>
 
 #include "util/Undistort.h"
 #include "IOWrapper/ImageRW.h"
@@ -47,27 +53,30 @@ inline int getdir(std::string dir, const std::string datasetType,
 {
     if (datasetType == "robotcar")
     {
-        std::ifstream tr;
-        std::string timesFile = dir.substr(0, dir.find_last_of('/'))
-                + "/../../../stereo.timestamps";
-        tr.open(timesFile.c_str());
-        while (!tr.eof() && tr.good())
+        std::string timestamps_file = dir.substr(0, dir.find_last_of('/'))
+                + "/../stereo.timestamps";
+        cout << "File containing timestamps: " << timestamps_file;
+        std::ifstream tr(timestamps_file);
+        std::string line;
+
+        while (getline(tr, line))
         {
-            char buf[1000];
-            tr.getline(buf, 1000);
+            cout << endl << line;
 
-            int mission_id;
-            long long timestamp_mus;
+            int segment_id;
+            long long timestamp;
 
-            if (2 == std::sscanf(buf, "%lld %d", &timestamp_mus, &mission_id))
-            {
-                files.push_back(std::to_string(timestamp_mus) + ".png");
-            }
-            else
-            {
-                printf("ERROR: unknown timestamp format.");
-                exit(1);
-            }
+            std::vector<std::string> split_vec;
+            boost::algorithm::split(split_vec, line, boost::is_any_of(" "));
+
+
+            timestamp = std::stoll(split_vec[0]);
+            segment_id = std::stoi(split_vec[1]);
+
+            files.push_back(std::to_string(timestamp) + ".png.jpg");
+//            cout << "ERROR: unknown timestamp format." << endl;
+//            cout << "Number of found arguments: " << std::sscanf(buf, "%lld %d", &timestamp_mus, &mission_id);
+//            exit(1);
         }
         tr.close();
     }
@@ -314,35 +323,34 @@ private:
 
     inline void loadTimestamps(const std::string datasetType)
     {
-        std::ifstream tr;
-
         if (datasetType == "robotcar")
         {
 
-            std::string timesFile = path.substr(0, path.find_last_of('/'))
-                    + "/../../../stereo.timestamps";
-            tr.open(timesFile.c_str());
-            while (!tr.eof() && tr.good())
-            {
-                std::string line;
-                char buf[1000];
-                tr.getline(buf, 1000);
+            std::string timestamps_file = path.substr(0, path.find_last_of('/'))
+                                          + "/../stereo.timestamps";
+            cout << "File containing timestamps: " << timestamps_file;
+            std::ifstream tr(timestamps_file);
+            std::string line;
 
-                int mission_id;
-                double timestamp_mus;
+            while (getline(tr, line))
+            {
+                cout << endl << line;
+
+                int segment_id;
+                double timestamp;
                 float exposure = 0;
 
-                if (2 == sscanf(buf, "%lf %d", &timestamp_mus, &mission_id))
-                {
-                    timestamps.push_back(timestamp_mus * 1e-6);
-                    exposures.push_back(exposure);
-                }
-                else
-                {
-                    printf("ERROR: unknown timestamp format.");
-                    exit(1);
-                }
+                std::vector<std::string> split_vec;
+                boost::algorithm::split(split_vec, line, boost::is_any_of(" "));
+
+
+                timestamp = std::stoll(split_vec[0]);
+                segment_id = std::stoi(split_vec[1]);
+
+                timestamps.push_back(timestamp * 1e-6);
+                exposures.push_back(exposure);
             }
+            tr.close();
         }
         else
         {
@@ -350,7 +358,7 @@ private:
             exit(1);
         }
 
-        tr.close();
+
 
         // check if exposures are correct, (possibly skip)
         bool exposuresGood = ((int) exposures.size() == (int) getNumImages());
